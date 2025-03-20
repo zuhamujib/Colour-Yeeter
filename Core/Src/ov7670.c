@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "config.h"
 #include "ov7670.h"
 
 extern I2C_HandleTypeDef hi2c2;
@@ -9,13 +8,19 @@ extern DCMI_HandleTypeDef hdcmi;
 extern DMA_HandleTypeDef hdma_dcmi;
 
 
-const uint8_t OV7670_reg[OV7670_REG_NUM][2] = { { 0x12, 0x80 },
-// Image format
-  { 0x12, 0x8 },  // 0x14 = QVGA size, RGB mode; 0x8 = QCIF, YUV, 0xc = QCIF (RGB)
-  { 0xc, 0x8 }, //
-  { 0x11, 0b1000000 }, //
+const uint8_t OV7670_reg[OV7670_REG_NUM+4][2] = {
+  { 0x12, 0x80 }, // reset
+  // Image format
+  { 0x12, 0xC },   		// COM7: QCIF + RGB, 0x14 = QVGA size, RGB mode; 0x8 = QCIF, YUV, 0xc = QCIF (RGB)
+  { 0x40, 0xD0 },   	// COM15: RGB565 format, 11 (full output range, [00, FF]) 01 (RGB565) 0000 (reserved)
 
-  // { 0xb0, 0x84 }, //Color mode (Not documented??)
+  { 0x8C, 0x00 },   	  // Disable RGB444
+  { 0x3A, 0x04 + 8 },     // UYVY
+  { 0x3D, 0x80 + 0x00 },  // gamma enable, UV auto adjust, UYVY
+  { 0xB0, 0x84 }, 	      // colour mode (Not documented??)
+
+  { 0xc, 0x8 },   	   // COM3: DCW, 1000
+  { 0x11, 0b1000000 }, // CLKRC: Internal Clock
 
   // Hardware window
   { 0x11, 0x01 }, //PCLK settings, 15fps
@@ -26,7 +31,7 @@ const uint8_t OV7670_reg[OV7670_REG_NUM][2] = { { 0x12, 0x80 },
   { 0x19, 0x02 }, //VSTART
   { 0x1a, 0x7a }, //VSTOP
 
-  // Scalling numbers
+  // Scaling numbers
   { 0x70, 0x3a }, //X_SCALING
   { 0x71, 0x35 }, //Y_SCALING
   { 0x72, 0x11 }, //DCW_SCALING
@@ -155,86 +160,48 @@ const uint8_t OV7670_reg[OV7670_REG_NUM][2] = { { 0x12, 0x80 },
 
 uint8_t ov7670_init(void){
   uint8_t val;
-  char msg[100];
 
-  print_msg("init_test\r\n");
   val = ov7670_read(0x0A);
-	
+
   if (val != 0x76) {
-    // sprintf(msg, "Wrong product id (0x%x)\r\n", val);
-    // print_msg(msg);
     return 1;
   }
-	
-	// print_msg("val is 0x76\n");
-  // Your code here
-	// we want to write the value to the address of each register given in 0v7670_reg[]
+
+  // Re-use the same code from Lab 5 here.
+	// write each register from OV7670_reg[]
   for (int i = 0; i < OV7670_REG_NUM; i++) {
 		if (ov7670_write(OV7670_reg[i][0], OV7670_reg[i][1]) != HAL_OK) {
 			Error_Handler();
-		}
-		HAL_Delay(10);
+      return 1;
+    }
+    HAL_Delay(10);  // wait 10ms between writes
 	}
-	
-	//
   return 0;
 }
 
 uint8_t ov7670_read(uint8_t reg){
-  // Re-use the same code from Lab 5 here.
-  // Your code here
-	uint8_t val = 0;
-	// first send the register value in one
-	while (HAL_I2C_Master_Transmit(&hi2c2, ADDR_OV7670, &reg, 1, 10000) != HAL_OK) {
-		Error_Handler();
-	} 
-	// recieve the data in the other one
-	while (HAL_I2C_Master_Receive(&hi2c2, ADDR_OV7670, &val, 1, 10000) != HAL_OK) {
-		Error_Handler();
-	}
+	uint8_t val;
+	HAL_StatusTypeDef status;
+
+	do {status = HAL_I2C_Master_Transmit(&hi2c2, ADDR_OV7670, &reg, 1, 10000);} while(status != HAL_OK);
+	do {status = HAL_I2C_Master_Receive(&hi2c2, ADDR_OV7670, &val, 1, 10000);} while(status != HAL_OK);
+
 	return val;
-  // 
 }
 
-HAL_StatusTypeDef ov7670_write(uint8_t reg,uint8_t val){
-  // Re-use the same code from Lab 5 here.
-  // Your code here
-	
-	uint8_t data[2];
-	data[0] = reg;
-	data[1] = val;
-	
-	HAL_StatusTypeDef status;
-	// in a loop waiting for the transmission to be successful
-	while (1) {
-		// note we send the dats and the register both in one transmission hence size is 2
-		status = HAL_I2C_Master_Transmit(&hi2c2, ADDR_OV7670, data, 2, 100);
-		if (status != HAL_OK) {
-			Error_Handler();
-		} else {
-			break;
-		}
-	} 
+HAL_StatusTypeDef ov7670_write(uint8_t reg, uint8_t val){
+	uint8_t data[2]={reg, val};
+	HAL_StatusTypeDef status = 0;
+
+	do {status = HAL_I2C_Master_Transmit(&hi2c2, ADDR_OV7670, data, 2, 10000);} while (status != HAL_OK);
+
 	return status;
-  //
 }
 
 void ov7670_snapshot(uint16_t *buff){
-  // Re-use the same code from Lab 5 here.
-	// Your code here
-	// the length field is the number of pixels per frame I suppose
-	// at one point 2 pixels into buff, so total_pixels for full frame
-	// uint32_t total_pixels = (IMG_ROWS * IMG_COLS)/ 2;
-	if (HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)buff, 12528) != HAL_OK){
-		Error_Handler();
-	}
-  //
+	HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)buff, IMG_ROWS*IMG_COLS/2);
 }
 
 void ov7670_capture(uint16_t *buff){
-  // Re-use the same code from Lab 5 here.
-	if (HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_CONTINUOUS, (uint32_t)buff, 12528) != HAL_OK){
-		Error_Handler();
-	}
-  //
+	HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_CONTINUOUS, (uint32_t)buff, IMG_ROWS*IMG_COLS/2);
 }
