@@ -225,7 +225,7 @@ void USART3_IRQHandler(void)
 {
   /* USER CODE BEGIN USART3_IRQn 0 */
 	if (__HAL_UART_GET_IT_SOURCE(&huart3, UART_IT_TC)) {
-    HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
+    // HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
   }
   /* USER CODE END USART3_IRQn 0 */
   HAL_UART_IRQHandler(&huart3);
@@ -282,8 +282,8 @@ void DMA2_Stream1_IRQHandler(void)
 void DCMI_IRQHandler(void)
 {
   /* USER CODE BEGIN DCMI_IRQn 0 */
-	HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
-  // dma_flag = 1;
+	// HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+  dma_flag = 1;
   /* USER CODE END DMA2_Stream1_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_dcmi);
   /* USER CODE END DCMI_IRQn 0 */

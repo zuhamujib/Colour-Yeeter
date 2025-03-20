@@ -6,14 +6,14 @@
 #define ADDR_OV7670 ((uint16_t)0x42)
 
 // #define OV7670_REG_NUM 123
-#define OV7670_REG_NUM 122
+#define OV7670_REG_NUM 123
 
 // Image settings
 #define IMG_ROWS 144
 #define IMG_COLS 174
 
 uint8_t ov7670_read(uint8_t reg);
-HAL_StatusTypeDef ov7670_write(uint8_t reg,uint8_t val);
+HAL_StatusTypeDef ov7670_write(uint8_t reg, uint8_t val);
 
 uint8_t ov7670_init(void);
 
