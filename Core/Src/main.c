@@ -130,7 +130,7 @@ int main(void)
 	
 	// we are using timer 2 channel 3 for setting the 
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3); //PB10 TIM2 CH3
-	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2); //PB10 TIM2 CH3
+	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2); //PA7 TIM2 CH3
   /* USER CODE END 2 */
 
   /* Infinite loop */
