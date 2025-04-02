@@ -17,20 +17,23 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#include "main.h"
 #include <string.h>
 #include <stdio.h>
-#include "config.h"
-#include "ov7670.h"
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "main.h"
+#include "config.h"
+#include "ov7670.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+enum {
+    COLOUR_UNKNOWN = 1, 
+		COLOUR_RED, 
+		COLOUR_BLUE,
+		COLOUR_GREEN
+};
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -44,45 +47,19 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+
+/* USER CODE BEGIN PV */
 uint16_t snapshot_buff[IMG_ROWS * IMG_COLS];
 char msg[100];
 uint8_t dma_flag = 0;
-/*
-DCMI_HandleTypeDef hdcmi;
-DMA_HandleTypeDef hdma_dcmi;
-
-I2C_HandleTypeDef hi2c2;
-
-TIM_HandleTypeDef htim1;
-TIM_HandleTypeDef htim2;
-TIM_HandleTypeDef htim3;
-TIM_HandleTypeDef htim6;
-
-UART_HandleTypeDef huart3;
-DMA_HandleTypeDef hdma_usart3_tx;
-
-PCD_HandleTypeDef hpcd_USB_OTG_FS;
-*/
-/* USER CODE BEGIN PV */
-
+uint16_t detected_colour = COLOUR_UNKNOWN;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
-void get_center_color(void);
-/*
-void SystemClock_Config(void);
-void MX_GPIO_Init(void);
-void MX_DMA_Init(void);
-void MX_DCMI_Init(void);
-void MX_USART3_UART_Init(void);
-void MX_USB_OTG_FS_PCD_Init(void);
-void MX_I2C2_Init(void);
-void MX_TIM1_Init(void);
-void MX_TIM6_Init(void);
-void MX_TIM2_Init(void);
-void MX_TIM3_Init(void);
-*/
+
 /* USER CODE BEGIN PFP */
+void get_center_color(void);
+void move_to_colour(uint16_t duration);
 
 /* USER CODE END PFP */
 
@@ -129,6 +106,7 @@ int main(void)
   MX_TIM6_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
 	ov7670_init();
@@ -136,20 +114,20 @@ int main(void)
 
 	// we are using timer 2 channel 3 for setting the 
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3); //PB10 TIM2 CH3
-	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2); //PA7 TIM2 CH3
+	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2); //PA7 TIM3 CH2
+	
+	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1); //PD12 TIM4 CH1
+	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2); //PD13 TIM4 CH2
+	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3); //PD14 TIM4 CH3
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	  ov7670_capture(snapshot_buff);
+		
+		
   while (1)
   {
-		if (dma_flag) {
-			HAL_DCMI_Suspend(&hdcmi);
-			get_center_color();	
-			dma_flag = 0;
-			HAL_DCMI_Resume(&hdcmi);
-		}
 		
 		HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3); //PB10 TIM2 CH3
 		HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2); //PB10 TIM2 CH3
@@ -169,26 +147,115 @@ int main(void)
 		
 		// (% speed * MAX_PWM) / 100
 		// Setting the speed to just 2000 for now
-    __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, 1500);
-		__HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_2, 1500);
-    /*
-		HAL_Delay(2000);
+    __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, 2000);
+		__HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_2, 2000);
 		
+		//HAL_Delay(200);
+		//__HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, 1000);
+		//__HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_2, 1000);
 		
-    // Stoping the motor
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, 0);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0); 
-		
+		// stopping motors when object detected
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, 0);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
 		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, 0);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 0);
-    HAL_Delay(2000);
-		*/
-
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 0);
+		HAL_Delay(500);
+			
+		if (dma_flag) {
+			HAL_DCMI_Suspend(&hdcmi);
+			get_center_color();
+			
+			dma_flag = 0;
+			HAL_DCMI_Resume(&hdcmi);
+		}
+		
+		if (detected_colour != COLOUR_UNKNOWN) {
+			// move to sorting zone depending on color
+			switch (detected_colour) {
+				case COLOUR_RED:
+					sprintf(msg, "red");
+					HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
+					HAL_Delay(200);
+					HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
+					move_to_colour(1000); // move motors for longest time
+					__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_1, 2500);
+					HAL_Delay(1105);
+					__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_1, 1500);
+					HAL_Delay(200);
+					__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_1, 500);
+					HAL_Delay(1100);
+					__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_1, 1500);
+					break;
+				case COLOUR_GREEN:
+					sprintf(msg, "green");
+					HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+					HAL_Delay(200);
+					HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+					move_to_colour(400); // move motors for shortest time
+					__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_2, 2500);
+					HAL_Delay(1000);
+					__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_2, 1500);
+					HAL_Delay(200);
+					__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_2, 500);
+					HAL_Delay(1000);
+					__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_2, 1500);
+					break;
+				case COLOUR_BLUE:
+					sprintf(msg, "blue");
+					HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+					HAL_Delay(200);
+					HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+					move_to_colour(700); // move motors for shortest time
+					__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_3, 2500);
+					HAL_Delay(1000);
+					__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_3, 1500);
+					HAL_Delay(200);
+					__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_3, 500);
+					HAL_Delay(1000);
+					__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_3, 1500);
+					break;
+				default:
+					// idk, skip??
+					move_to_colour(1200); // move motors for shortest time
+					break;
+			}
+		}
     /* USER CODE END WHILE */
-
+		HAL_Delay(1000);
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
+}
+
+
+void move_to_colour(uint16_t duration) {
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, 1);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
+	
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, 1);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 0);
+		
+    
+		// we set the timer max period to 2000 (max high speed)
+		
+		// to calculate speed and adjust to low, medium, high we can use the formula:
+		
+		// (% speed * MAX_PWM) / 100
+		// Setting the speed to just 2000 for now
+    __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, 1500);
+		__HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_2, 1500);
+		
+		HAL_Delay(duration);
+		//__HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, 1000);
+		//__HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_2, 1000);
+		
+		// stopping motors when object detected
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, 0);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, 0);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 0);
+		// HAL_Delay(1000);
+	
 }
 
 void get_center_color() {
@@ -242,28 +309,22 @@ void get_center_color() {
   if (red_count > green_count+5 && blue_count+5 < red_count ) {
     // RED, 1
   //colour = 1;
-  sprintf(msg, "red");
-  HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
-  HAL_Delay(200);
-  HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
+	detected_colour = COLOUR_RED;
   }
   else if (green_count > red_count+5 && blue_count+5 < green_count) {
   // GREEN, 2
   //colour = 2;
-  sprintf(msg, "green");
-  HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
-  HAL_Delay(200);
-  HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+	detected_colour = COLOUR_GREEN;
   }
   else if (blue_count > green_count+5 && red_count+5 < blue_count) {
     // BLUE, 3
   //colour = 3;
-  sprintf(msg, "blue");
-  HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-  HAL_Delay(200);
-  HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+	detected_colour = COLOUR_BLUE;
   }
-  else sprintf(msg, "colour unknown");
+  else {
+		sprintf(msg, "colour unknown");
+		detected_colour = COLOUR_UNKNOWN;
+	}
 
   HAL_UART_Transmit(&huart3, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
   sprintf(msg, " - R:%d avg, %d pixels, G:%d avg, %d pixels, B:%d avg, %d pixels\r\n", red_avg, red_count, green_avg, green_count, blue_avg, blue_count);
