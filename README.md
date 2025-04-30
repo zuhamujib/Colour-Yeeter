@@ -14,5 +14,5 @@ This project was created as part of an embedded systems course to explore embedd
 ## Team
 | Zuha Mujib | Paige McDougal |
 | ------------- | ------------- |
-| ![image](https://github.com/user-attachments/assets/bdf46a6e-7cd0-4d35-abd7-a113a2601502) | ![image](https://github.com/user-attachments/assets/c69d5e58-8972-4d99-8d4c-5886ccd0dbae) |
+| <img src="https://github.com/user-attachments/assets/bdf46a6e-7cd0-4d35-abd7-a113a2601502" width="120"/> | <img src="https://github.com/user-attachments/assets/c69d5e58-8972-4d99-8d4c-5886ccd0dbae" width="120"/> |
 | [@zuhamujib](https://github.com/zuhamujib) | [@paigemcdo](https://github.com/paigemcdo) |
