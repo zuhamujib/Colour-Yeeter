@@ -4,7 +4,7 @@ An automated colour sorting conveyor belt with a motorized push-arm mechanism to
 
 ## 🚀 Demo
 
-!(https://github.com/user-attachments/assets/36c271b4-2a6e-4fd6-b317-2e4f87ac8145)
+https://github.com/user-attachments/assets/36c271b4-2a6e-4fd6-b317-2e4f87ac8145
 
 
 ## 💬 About
