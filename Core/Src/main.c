@@ -255,7 +255,6 @@ void move_to_colour(uint16_t duration) {
 		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, 0);
 		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 0);
 		// HAL_Delay(1000);
-	
 }
 
 void get_center_color() {
